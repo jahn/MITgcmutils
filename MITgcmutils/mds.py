@@ -199,7 +199,7 @@ _typesuffixes = {'float32':'f4',
                 }
 
 def rdmds(fnamearg,itrs=-1,machineformat='b',rec=None,fill_value=0,
-          returnmeta=False,astype=float,region=None,lev=(),
+          returnmeta=False,astype=float,region=None,lev=(),fld=None,
           usememmap=False,mm=False,squeeze=True,verbose=False):
     """ a     = rdmds(fname,...)
     a     = rdmds(fname,itrs,...)
@@ -237,6 +237,10 @@ def rdmds(fnamearg,itrs=-1,machineformat='b',rec=None,fill_value=0,
         machineformat :: endianness ('b' or 'l', default 'b')
         rec           :: list of records to read (default all)
                          useful for pickups and multi-field diagnostics files
+        fld           :: field to read, or list of fields
+                         use this instead of rec to specify records by name
+                         may do unexpected things if fields of varying sizes
+                         are present (such as in pickups)
         fill_value    :: fill value for missing (blank) tiles (default 0)
         astype        :: data type to return (default: double precision)
                          None: keep data type/precision of file
@@ -262,6 +266,8 @@ def rdmds(fnamearg,itrs=-1,machineformat='b',rec=None,fill_value=0,
         a = rdmds('diags',2880,rec=0,lev=([0],r_[:2,5:8]))  # same as previous
         a = rdmds('diags',2880,rec=0)[0, [0,1,5,6,7], ...]  # same, but less efficient
         a = rdmds('diags',2880)[0, 0, [0,1,5,6,7], ...]     # even less efficient
+        T = rdmds('diags',2880,fld='THETA')
+        T,S = rdmds('diags',2880,fld=['THETA','SALT'])
     """
     import functools
     usememmap = usememmap or mm
@@ -295,8 +301,18 @@ def rdmds(fnamearg,itrs=-1,machineformat='b',rec=None,fill_value=0,
     # always make itrs a list
     itrs = aslist(itrs)
 
-    allrec = rec is None
-    reclist = aslist(rec)
+    if fld is not None:
+        if rec is not None:
+            raise ValueError('rdmds: fld and rec cannot both be given')
+        recislist = type(fld[0]) != type(fld)
+        if not recislist:
+            fld = [fld]
+        reclist = None
+    else:
+        reclist = aslist(rec)
+        recislist = np.iterable(rec)
+    allrec = rec is None and fld is None
+
     if not isinstance(lev,tuple):
         lev = (lev,)
     levs = tuple( aslist(l) for l in lev )
@@ -353,6 +369,9 @@ def rdmds(fnamearg,itrs=-1,machineformat='b',rec=None,fill_value=0,
                     reclist = range(nrecords)
                     recinds = np.s_[:,] + levinds
                 else:
+                    if reclist is None:
+                        fldList = meta['fldList']
+                        reclist = [fldList.index(f) for f in fld]
                     recinds = np.ix_(reclist, *levs)
 
                 if region is None:
@@ -465,7 +484,7 @@ def rdmds(fnamearg,itrs=-1,machineformat='b',rec=None,fill_value=0,
             squeezed = tuple( d for d in dims if d > 1 )
         else:
             # squeeze all that came from scalar arguments
-            keepers = [itrsislist, np.iterable(rec)] + [np.iterable(l) for l in lev]
+            keepers = [itrsislist, recislist] + [np.iterable(l) for l in lev]
             squeezed = tuple( d for d,keep in zip(dims, keepers) if keep )
 
         arr = arr.reshape(squeezed+arr.shape[2+nlev:])
