@@ -33,6 +33,18 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install tox
+      - name: Make download directories
+        run: |
+          mkdir -p tests/data/cs
+          mkdir tests/baseline_images
+      - name: Download baseline images
+        uses: wei/curl@v1.1.1
+        with:
+          args: https://engaging-web.mit.edu/~jahn/MITgcmutils/baseline_images/cs_pcol.png -o tests/baseline_images/cs_pcol.png
+      - name: Download mnc output
+        uses: wei/curl@v1.1.1
+        with:
+          args: https://engaging-web.mit.edu/~jahn/MITgcmutils/mnc/global_ocean.cs32x15/run/mnc_test_0001/state.0000072000.t[001-012].nc -o tests/data/cs/state.0000072000.t\#1.nc
       - name: Run Tox
         run: tox -e ${{ matrix.env }}
 
